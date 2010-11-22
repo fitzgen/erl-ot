@@ -24,19 +24,12 @@
         </div>
         <p>This is a simple example written in Erlang of the real-time
 group-collaboration algorithm <a href="http://en.wikipedia.org/wiki/Operational_transformation">Operational Transformation</a>. OT is an
-optimistic algorithm that lets clients apply operations to a document
-immediately as they are created, and only synchronizes the changes with the
-server after they have been made. If another client has altered the document
-while the first client was making the first operation, we can transform each
-operation so that the server and every client will be brought back to the
-same document state.</p>
-<p>Each operation is either an insert or a delete of a single character at an
-index in a document. A document is simply a string. This is hardly fit for
-real-world use: most documents are more complicated than plain text, and
-working one character at a time will create an unneccessary amount of
-operations which require transformations. The large amount of operations
-taxes bandwitdh more than you would want in a real world application, as
-well. I am using single character operations for simplicity.</p>
+optimistic concurrency algorithm that lets clients apply operations to a
+document immediately as they are created, and only synchronizes the changes
+with the server after they have been made. If another client has altered the
+document while the first client was making the first operation, we can
+transform each operation so that the server and every client will be brought
+back to the same document state.</p>
       </td>
       <td class=code>
         <div class='highlight'><pre><div class="highlight"><pre><span class="p">-</span><span class="ni">module</span><span class="p">(</span><span class="n">ot</span><span class="p">).</span>
@@ -49,7 +42,13 @@ well. I am using single character operations for simplicity.</p>
           <a class="octothorpe" href="#section-1">#</a>
         </div>
         <h2>Operations</h2>
-<p>TODO: expand on operations.</p>
+<p>Each operation is either an insert or a delete of a single character at an
+index in a document. A document is simply a string. This is hardly fit for
+real-world use: most documents are more complicated than plain text, and
+working one character at a time will create an unneccessary amount of
+operations which require transformations. The large amount of operations
+taxes bandwitdh more than you would want in a real world application, as
+well. I am using single character operations for simplicity.</p>
 <h3><code>xform</code></h3>
 <p>The following description of the <code>xform</code> function is taken from
 <a href="ftp://ftp.lambda.moo.mud.org/pub/MOO/papers/JupiterWin.ps">High-Latency, Low-Bandwidth Windowing in the Jupiter Collaboration

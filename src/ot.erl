@@ -1,19 +1,11 @@
 %% This is a simple example written in Erlang of the real-time
 %% group-collaboration algorithm [Operational Transformation][ot]. OT is an
-%% optimistic algorithm that lets clients apply operations to a document
-%% immediately as they are created, and only synchronizes the changes with the
-%% server after they have been made. If another client has altered the document
-%% while the first client was making the first operation, we can transform each
-%% operation so that the server and every client will be brought back to the
-%% same document state.
-%%
-%% Each operation is either an insert or a delete of a single character at an
-%% index in a document. A document is simply a string. This is hardly fit for
-%% real-world use: most documents are more complicated than plain text, and
-%% working one character at a time will create an unneccessary amount of
-%% operations which require transformations. The large amount of operations
-%% taxes bandwitdh more than you would want in a real world application, as
-%% well. I am using single character operations for simplicity.
+%% optimistic concurrency algorithm that lets clients apply operations to a
+%% document immediately as they are created, and only synchronizes the changes
+%% with the server after they have been made. If another client has altered the
+%% document while the first client was making the first operation, we can
+%% transform each operation so that the server and every client will be brought
+%% back to the same document state.
 %%
 %% [ot]: http://en.wikipedia.org/wiki/Operational_transformation
 
@@ -22,9 +14,16 @@
 -include_lib("eunit/include/eunit.hrl").
 -export([start/0, stop/0, server/1, client/1, get_doc/0]).
 
+
 %% ## Operations
 %%
-%% TODO: expand on operations.
+%% Each operation is either an insert or a delete of a single character at an
+%% index in a document. A document is simply a string. This is hardly fit for
+%% real-world use: most documents are more complicated than plain text, and
+%% working one character at a time will create an unneccessary amount of
+%% operations which require transformations. The large amount of operations
+%% taxes bandwitdh more than you would want in a real world application, as
+%% well. I am using single character operations for simplicity.
 %%
 %% ### `xform`
 %%
