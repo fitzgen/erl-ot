@@ -1,0 +1,422 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta http-equiv="content-type" content="text/html;charset=utf-8">
+  <title>ot.erl</title>
+  <link rel="stylesheet" href="pycco.css">
+</head>
+<body>
+<div id='container'>
+  <div id="background"></div>
+  
+  <table cellspacing=0 cellpadding=0>
+  <thead>
+    <tr>
+      <th class=docs><h1>ot.erl</h1></th>
+      <th class=code></th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr id='section-0'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-0">#</a>
+        </div>
+        <p>This is a simple example written in Erlang of the real-time
+group-collaboration algorithm <a href="http://en.wikipedia.org/wiki/Operational_transformation">Operational Transformation</a>. OT is an
+optimistic algorithm that lets clients apply operations to a document
+immediately as they are created, and only synchronizes the changes with the
+server after they have been made. If another client has altered the document
+while the first client was making the first operation, we can transform each
+operation so that the server and every client will be brought back to the
+same document state.</p>
+<p>Each operation is either an insert or a delete of a single character at an
+index in a document. A document is simply a string. This is hardly fit for
+real-world use: most documents are more complicated than plain text, and
+working one character at a time will create an unneccessary amount of
+operations which require transformations. The large amount of operations
+taxes bandwitdh more than you would want in a real world application, as
+well. I am using single character operations for simplicity.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="p">-</span><span class="ni">module</span><span class="p">(</span><span class="n">ot</span><span class="p">).</span>
+<span class="p">-</span><span class="ni">include_lib</span><span class="p">(</span><span class="s">&quot;eunit/include/eunit.hrl&quot;</span><span class="p">).</span>
+<span class="p">-</span><span class="ni">export</span><span class="p">([</span><span class="n">start</span><span class="o">/</span><span class="mi">0</span><span class="p">,</span> <span class="n">stop</span><span class="o">/</span><span class="mi">0</span><span class="p">,</span> <span class="n">server</span><span class="o">/</span><span class="mi">1</span><span class="p">,</span> <span class="n">client</span><span class="o">/</span><span class="mi">1</span><span class="p">,</span> <span class="n">get_doc</span><span class="o">/</span><span class="mi">0</span><span class="p">]).</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-1'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-1">#</a>
+        </div>
+        <h2>Operations</h2>
+<p>TODO: expand on operations.</p>
+<h3><code>xform</code></h3>
+<p>The following description of the <code>xform</code> function is taken from
+<a href="ftp://ftp.lambda.moo.mud.org/pub/MOO/papers/JupiterWin.ps">High-Latency, Low-Bandwidth Windowing in the Jupiter Collaboration
+System</a>.</p>
+<blockquote>
+<p>The general tool for handling conflicting messages is a function, <code>xform</code>,
+that maps a pair of messages to the fixed up versions. We write</p>
+<pre><code>xform(c, s) = {c’, s’}
+</code></pre>
+<p>where <code>c</code> and <code>s</code> are the original client and server messages. The messages <code>c’</code>
+and <code>s’</code> must have the property that if the client applies <code>c</code> followed by <code>s’</code>,
+and the server applies <code>s</code> followed by <code>c’</code>, then the client and server will
+wind up in the same final state.</p>
+</blockquote>
+<p>In our simple example, there are only 6 possible pairs of operation types
+which must be unified with eachother: nop/nop, delete/nop, insert/nop,
+delete/delete, insert/insert, and insert/delete.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-2'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-2">#</a>
+        </div>
+        <h4>*/<code>nop</code></h4>
+<p>Transforming a pair of operations when one is <code>nop</code> (no operation) is simple:
+we don't really need to actually calculate the transformation anything.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">xform</span><span class="p">(</span><span class="n">nop</span><span class="p">,</span> <span class="n">nop</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="n">nop</span><span class="p">,</span> <span class="n">nop</span><span class="p">}};</span>
+<span class="nf">xform</span><span class="p">(</span><span class="n">nop</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="n">nop</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="n">nop</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">}}};</span>
+<span class="nf">xform</span><span class="p">(</span><span class="n">nop</span><span class="p">,</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">},</span> <span class="n">nop</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="n">nop</span><span class="p">,</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">}}};</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-3'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-3">#</a>
+        </div>
+        <h4>Delete/Delete</h4>
+<p>The Delete/Delete pair is the easiest case to transform, besides <code>nop</code>. If
+both operations deleted the same character, then emit the <code>nop</code> operation
+because they are already in the same state. Otherwise, just shift the index
+of the delete with the larger index down by one.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">xform</span><span class="p">({</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="n">nop</span><span class="p">,</span> <span class="n">nop</span><span class="p">}};</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">Y</span><span class="p">})</span> <span class="k">when</span> <span class="nv">X</span> <span class="o">&gt;</span> <span class="nv">Y</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">Y</span><span class="p">})</span> <span class="k">when</span> <span class="nv">Y</span> <span class="o">&gt;</span> <span class="nv">X</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-4'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-4">#</a>
+        </div>
+        <h4>Insert/Insert</h4>
+<p>Each insert operation has the form <code>{ins, Index, Character}</code>. We break ties
+based on order of the characters, and always keep user data by shifting
+insertion indices rather than creating deletion operations.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="n">nop</span><span class="p">,</span> <span class="n">nop</span><span class="p">}};</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">B</span><span class="p">})</span> <span class="k">when</span> <span class="nv">A</span> <span class="o">&lt;</span> <span class="nv">B</span><span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">B</span><span class="p">})</span> <span class="k">when</span> <span class="nv">A</span> <span class="o">&gt;</span> <span class="nv">B</span><span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">Y</span><span class="p">,</span> <span class="nv">B</span><span class="p">})</span> <span class="k">when</span> <span class="nv">X</span> <span class="o">&gt;</span> <span class="nv">Y</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">Y</span><span class="p">,</span> <span class="nv">B</span><span class="p">})</span> <span class="k">when</span> <span class="nv">Y</span> <span class="o">&gt;</span> <span class="nv">X</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-5'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-5">#</a>
+        </div>
+        <h4>Insert/Delete</h4>
+<p>What do we do when one operation is an insert and the other is a delete? We
+always attempt to keep the insert so that we do not lose user data. It is
+always better to force users to go back and delete data to clean a document
+up than it is to lose data.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">Y</span><span class="p">})</span> <span class="k">when</span> <span class="nv">X</span> <span class="o">=&lt;</span> <span class="nv">Y</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">A</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">Y</span><span class="p">})</span> <span class="k">when</span> <span class="nv">X</span> <span class="o">&gt;</span> <span class="nv">Y</span><span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">;</span>
+<span class="nf">xform</span><span class="p">({</span><span class="n">del</span><span class="p">,</span> <span class="nv">D</span><span class="p">},</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">C</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Bprime</span><span class="p">,</span> <span class="nv">Aprime</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">({</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">C</span><span class="p">},</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">D</span><span class="p">}),</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Aprime</span><span class="p">,</span> <span class="nv">Bprime</span><span class="p">}};</span>
+
+
+<span class="nf">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">error</span><span class="p">,</span> <span class="p">{</span><span class="s">&quot;Do not know how to transform:&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">}}.</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-6'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-6">#</a>
+        </div>
+        <h3><code>apply_op</code></h3>
+<p><code>apply_op</code> takes two arguments: a document (which is currently just a string),
+and an operation. It returns a new document which is identical to the first,
+accept with the modifications described in the operation applied to it.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="n">nop</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="nv">Doc</span><span class="p">;</span>
+<span class="nf">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="nv">X</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="nv">Doc_Length</span> <span class="o">=</span> <span class="nb">length</span><span class="p">(</span><span class="nv">Doc</span><span class="p">),</span>
+    <span class="nn">lists</span><span class="p">:</span><span class="n">sublist</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">X</span><span class="p">)</span> <span class="o">++</span> <span class="nn">lists</span><span class="p">:</span><span class="n">sublist</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">X</span><span class="o">+</span><span class="mi">2</span><span class="p">,</span> <span class="nv">Doc_Length</span><span class="p">);</span>
+<span class="nf">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="nv">Char</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">[</span><span class="nv">Char</span><span class="p">]</span> <span class="o">++</span> <span class="nv">Doc</span><span class="p">;</span>
+<span class="nf">apply_op</span><span class="p">([</span><span class="nv">H</span><span class="p">|</span><span class="nv">T</span><span class="p">],</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="p">,</span> <span class="nv">Char</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="p">[</span><span class="nv">H</span> <span class="p">|</span> <span class="n">apply_op</span><span class="p">(</span><span class="nv">T</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="nv">X</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="nv">Char</span><span class="p">})].</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-7'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-7">#</a>
+        </div>
+        <h2>Messages and Client/Server Communication</h2>
+<p>When passing our operations between client and server, we need to store some
+metadata about the operation with it. We will call the combination of an
+operation and its metadata a message.</p>
+<p>What kind of metadata do we need to store? Well we need to know an
+operation's parent document state. It only makes sense to apply an operation
+to a document which is in the same state as the document which generated the
+operation was in.</p>
+<p>The easiest way to represent a document's state is a hash of its
+contents. Daniel Spiewak sings the praises of using a hash to represent a
+document's state (although, for compatibility with Google Wave, he is forced
+into using a diferent technique):</p>
+<blockquote>
+<p>This scheme has some very nice advantages. Given an operation (and its
+associated parent hash), we can determine instantly whether or not we have
+the appropriate document state to apply said operation. Hashes also have the
+very convenient property of converging exactly when the document states
+converge.</p>
+</blockquote>
+<p><a href="http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation">Daniel's article on understanding Operational
+Transformation</a> is a must read for anyone interested in the
+topic.</p>
+<p>We will represent messages with the structure <code>{msg, Parent, Operation}</code>.</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nb">hash</span><span class="p">(</span><span class="nv">Doc</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="nb">binary_to_list</span><span class="p">(</span><span class="nn">erlang</span><span class="p">:</span><span class="nb">md5</span><span class="p">(</span><span class="nv">Doc</span><span class="p">)).</span>
+
+<span class="nf">apply_message</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Parent</span><span class="p">,</span> <span class="nv">Op</span><span class="p">})</span> <span class="o">-&gt;</span>
+    <span class="k">case</span> <span class="nb">hash</span><span class="p">(</span><span class="nv">Doc</span><span class="p">)</span> <span class="o">==</span> <span class="nv">Parent</span> <span class="k">of</span>
+        <span class="n">true</span> <span class="o">-&gt;</span>
+            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="n">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Op</span><span class="p">)};</span>
+        <span class="n">false</span> <span class="o">-&gt;</span>
+            <span class="p">{</span><span class="n">error</span><span class="p">,</span> <span class="s">&quot;Cannot apply this message to the document because the</span>
+<span class="s">                     operation was generated from a different document state.&quot;</span><span class="p">}</span>
+    <span class="k">end</span><span class="p">.</span>
+
+<span class="nf">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="n">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">[],</span> <span class="p">[]).</span>
+
+<span class="nf">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Clients</span><span class="p">,</span> <span class="nv">History</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="k">receive</span>
+        <span class="n">stop</span> <span class="o">-&gt;</span>
+            <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;Server stopping</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+            <span class="nn">lists</span><span class="p">:</span><span class="n">foreach</span><span class="p">(</span><span class="k">fun</span> <span class="p">(</span><span class="nv">C</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nv">C</span> <span class="o">!</span> <span class="n">stop</span> <span class="k">end</span><span class="p">,</span> <span class="nv">Clients</span><span class="p">),</span>
+            <span class="n">ok</span><span class="p">;</span>
+        <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="nv">Pid</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="nv">Pid</span> <span class="o">!</span> <span class="nv">Doc</span><span class="p">,</span>
+            <span class="n">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Clients</span><span class="p">,</span> <span class="nv">History</span><span class="p">);</span>
+        <span class="p">{</span><span class="n">newclient</span><span class="p">,</span> <span class="nv">Pid</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;Server got new client </span><span class="si">~p~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="nv">Pid</span><span class="p">]),</span>
+            <span class="nv">Pid</span> <span class="o">!</span> <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">},</span>
+            <span class="n">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">[</span><span class="nv">Pid</span> <span class="p">|</span> <span class="nv">Clients</span><span class="p">],</span> <span class="nv">History</span><span class="p">);</span>
+        <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Parent</span><span class="p">,</span> <span class="nv">Op</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="c">% TODO: look in history</span>
+            <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;Server got new message with op </span><span class="si">~p~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="nv">Op</span><span class="p">]),</span>
+            <span class="k">case</span> <span class="n">apply_message</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Parent</span><span class="p">,</span> <span class="nv">Op</span><span class="p">})</span> <span class="k">of</span>
+                <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="nv">New_Doc</span><span class="p">}</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    message applied successfully</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="n">broadcast</span><span class="p">(</span><span class="nv">Clients</span><span class="p">,</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Parent</span><span class="p">,</span> <span class="nv">Op</span><span class="p">}),</span>
+                    <span class="n">server</span><span class="p">(</span><span class="nv">New_Doc</span><span class="p">,</span>
+                           <span class="nv">Clients</span><span class="p">,</span>
+                           <span class="p">[{</span><span class="nb">hash</span><span class="p">(</span><span class="nv">New_Doc</span><span class="p">),</span> <span class="nv">New_Doc</span><span class="p">}</span> <span class="p">|</span> <span class="nv">History</span><span class="p">]);</span>
+                <span class="p">_</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    message did not apply, ignoring it...</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="n">server</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Clients</span><span class="p">,</span> <span class="nv">History</span><span class="p">)</span>
+            <span class="k">end</span>
+    <span class="k">end</span><span class="p">.</span>
+
+<span class="nf">broadcast</span><span class="p">([],</span> <span class="p">_)</span> <span class="o">-&gt;</span>
+    <span class="n">ok</span><span class="p">;</span>
+<span class="nf">broadcast</span><span class="p">([</span><span class="nv">C</span><span class="p">|</span><span class="nv">Clients</span><span class="p">],</span> <span class="nv">Msg</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;broadcasting </span><span class="si">~p</span><span class="s"> to </span><span class="si">~p~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="nv">Msg</span><span class="p">,</span> <span class="nv">C</span><span class="p">]),</span>
+    <span class="nv">C</span> <span class="o">!</span> <span class="nv">Msg</span><span class="p">,</span>
+    <span class="n">broadcast</span><span class="p">(</span><span class="nv">Clients</span><span class="p">,</span> <span class="nv">Msg</span><span class="p">).</span>
+
+<span class="nf">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">newclient</span><span class="p">,</span> <span class="n">self</span><span class="p">()},</span>
+    <span class="k">receive</span>
+        <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nb">hash</span><span class="p">(</span><span class="nv">Doc</span><span class="p">),</span> <span class="n">nop</span><span class="p">},</span>
+            <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">,</span> <span class="p">[{</span><span class="n">nop</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}])</span>
+    <span class="k">end</span><span class="p">.</span>
+
+<span class="c">% TODO: outgoing should be pairs of {Op, Doc}...</span>
+<span class="nf">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">,</span> <span class="nv">Outgoing</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="k">receive</span>
+        <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="nv">Op</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;Client </span><span class="si">~p</span><span class="s"> received user op </span><span class="si">~p~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">self</span><span class="p">(),</span> <span class="nv">Op</span><span class="p">]),</span>
+            <span class="k">case</span> <span class="nv">Outgoing</span> <span class="k">of</span>
+                <span class="p">[]</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    sending the new operation</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nb">hash</span><span class="p">(</span><span class="nv">Doc</span><span class="p">),</span> <span class="nv">Op</span><span class="p">},</span>
+                    <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">,</span> <span class="p">[{</span><span class="nv">Op</span><span class="p">,</span> <span class="n">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Op</span><span class="p">)}]);</span>
+                <span class="p">_</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    queueing the new operation</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">,</span> <span class="nv">Outgoing</span> <span class="o">++</span> <span class="p">[{</span><span class="nv">Op</span><span class="p">,</span> <span class="n">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Op</span><span class="p">)}])</span>
+            <span class="k">end</span><span class="p">;</span>
+        <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Hash</span><span class="p">,</span> <span class="nv">Op</span><span class="p">}</span> <span class="o">-&gt;</span>
+            <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;Client </span><span class="si">~p</span><span class="s"> got message from server: </span><span class="si">~p~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">self</span><span class="p">(),</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nv">Hash</span><span class="p">,</span> <span class="nv">Op</span><span class="p">}]),</span>
+            <span class="nv">Hash</span> <span class="o">=</span> <span class="nb">hash</span><span class="p">(</span><span class="nv">Doc</span><span class="p">),</span>
+            <span class="nv">New_Doc</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="nv">Doc</span><span class="p">,</span> <span class="nv">Op</span><span class="p">),</span>
+            <span class="k">case</span> <span class="nv">Outgoing</span> <span class="k">of</span>
+                <span class="p">[{</span><span class="nv">Op</span><span class="p">,</span> <span class="nv">New_Doc</span><span class="p">}</span> <span class="p">|</span> <span class="nv">Rest</span><span class="p">]</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    it was one that I sent</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="k">case</span> <span class="nv">Rest</span> <span class="k">of</span>
+                        <span class="p">[{</span><span class="nv">Next_Op</span><span class="p">,</span> <span class="p">_}</span> <span class="p">|</span> <span class="p">_]</span> <span class="o">-&gt;</span>
+                            <span class="no">?debugFmt</span><span class="p">(</span><span class="s">&quot;Client </span><span class="si">~p</span><span class="s"> sending buffered operation </span><span class="si">~p</span><span class="s"> to server</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">,</span> <span class="p">[</span><span class="n">self</span><span class="p">(),</span> <span class="nv">Next_Op</span><span class="p">]),</span>
+                            <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">msg</span><span class="p">,</span> <span class="nb">hash</span><span class="p">(</span><span class="nv">New_Doc</span><span class="p">),</span> <span class="nv">Next_Op</span><span class="p">},</span>
+                            <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">New_Doc</span><span class="p">,</span> <span class="nv">Rest</span><span class="p">);</span>
+                        <span class="p">[]</span> <span class="o">-&gt;</span>
+                            <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">New_Doc</span><span class="p">,</span> <span class="p">[])</span>
+                    <span class="k">end</span><span class="p">;</span>
+                <span class="p">_</span> <span class="o">-&gt;</span>
+                    <span class="no">?debugMsg</span><span class="p">(</span><span class="s">&quot;    it was one someone else sent</span><span class="si">~n</span><span class="s">&quot;</span><span class="p">),</span>
+                    <span class="nv">Outgoing1</span> <span class="o">=</span> <span class="n">transform_each</span><span class="p">(</span><span class="nv">Outgoing</span><span class="p">,</span> <span class="nv">Op</span><span class="p">),</span>
+                    <span class="n">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">,</span> <span class="nv">New_Doc</span><span class="p">,</span> <span class="nv">Outgoing1</span><span class="p">)</span>
+            <span class="k">end</span>
+    <span class="k">end</span><span class="p">.</span>
+
+<span class="nf">transform_each</span><span class="p">([],</span> <span class="p">_)</span> <span class="o">-&gt;</span>
+    <span class="p">[];</span>
+<span class="nf">transform_each</span><span class="p">([{</span><span class="nv">A</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}</span> <span class="p">|</span> <span class="nv">Rest</span><span class="p">],</span> <span class="nv">B</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Aprime</span><span class="p">,</span> <span class="nv">Bprime</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="p">[{</span><span class="nv">Aprime</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}</span> <span class="p">|</span> <span class="n">transform_each</span><span class="p">(</span><span class="nv">Rest</span><span class="p">,</span> <span class="nv">Bprime</span><span class="p">)].</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-8'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-8">#</a>
+        </div>
+        <h2>Application</h2>
+<p>OTP Application interface to play nice with the Erlang ecosystem.</p>
+<p>TODO: http://www.erlang.org/doc/design_principles/applications.html</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">start</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nb">register</span><span class="p">(</span><span class="n">ot_server</span><span class="p">,</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;&quot;</span><span class="p">])).</span>
+
+<span class="nf">stop</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="n">ot_server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span>
+
+<span class="nf">get_doc</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="n">get_doc</span><span class="p">(</span><span class="n">ot_server</span><span class="p">).</span>
+
+<span class="nf">get_doc</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="n">self</span><span class="p">()},</span>
+    <span class="k">receive</span>
+        <span class="nv">Doc</span> <span class="o">-&gt;</span>
+            <span class="nv">Doc</span>
+    <span class="k">end</span><span class="p">.</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-9'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-9">#</a>
+        </div>
+        <h2>Tests</h2>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">identical_delete_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">3</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;foo&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;food&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;foo&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;food&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">identical_insert_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="sc">$d</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;food&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;food&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;foo&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">two_deletes_a_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">4</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">2</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;erag&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;erlang&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;erag&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;erlang&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">two_deletes_b_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">2</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">4</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;erag&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;erlang&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;erag&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;erlang&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">two_inserts_a_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="sc">$c</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="sc">$t</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;scooter&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;sooer&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;scooter&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;sooer&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">two_inserts_b_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="sc">$t</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="sc">$c</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;scooter&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;sooer&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;scooter&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;sooer&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">insert_delete_a_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="sc">$t</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">2</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;cat&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;cat&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">insert_delete_b_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="sc">$t</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">0</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;atb&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;atb&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">insert_delete_c_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="sc">$t</span><span class="p">},</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="p">{</span><span class="n">del</span><span class="p">,</span> <span class="mi">2</span><span class="p">},</span>
+    <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="p">{</span><span class="nv">Ap</span><span class="p">,</span> <span class="nv">Bp</span><span class="p">}}</span> <span class="o">=</span> <span class="n">xform</span><span class="p">(</span><span class="nv">A</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span>
+    <span class="s">&quot;tca&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
+    <span class="s">&quot;tca&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span>
+
+<span class="nf">client_server_communication_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">Server</span> <span class="o">=</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot; is cool&quot;</span><span class="p">]),</span>
+    <span class="nv">Client</span> <span class="o">=</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="p">[</span><span class="nv">Server</span><span class="p">]),</span>
+    <span class="nv">Client</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="sc">$n</span><span class="p">}},</span>
+    <span class="nv">Client</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="sc">$i</span><span class="p">}},</span>
+    <span class="nv">Client</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="sc">$c</span><span class="p">}},</span>
+    <span class="nv">Client</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="sc">$k</span><span class="p">}},</span>
+    <span class="s">&quot;nick&quot;</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">Server</span><span class="p">),</span>
+    <span class="nv">Server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span>
+
+</pre></div></pre></div>
+      </td>
+    </tr>
+  </table>
+</div>
+</body>
