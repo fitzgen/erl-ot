@@ -1,0 +1,10 @@
+An attempt to implement a very simple version of Operational Transformation in
+Erlang.
+
+OT Resources:
+
+  * ftp://ftp.lambda.moo.mud.org/pub/MOO/papers/JupiterWin.ps
+
+  * http://www.codecommit.com/blog/java/understanding-and-applying-operational-transformation
+
+  * http://en.wikipedia.org/wiki/Operational_transformation
