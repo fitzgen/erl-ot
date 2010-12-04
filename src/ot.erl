@@ -130,7 +130,7 @@ apply_op(Doc, {ins, 0, Char}) ->
 apply_op([H|T], {ins, X, Char}) ->
     [H | apply_op(T, {ins, X-1, Char})].
 
-%% ## Messages and Client <-> Server Communication
+%% ## Client <-> Server Communication
 %%
 %% When passing our operations between client and server, we need to store some
 %% metadata about the operation with it. We will call the combination of an
@@ -233,7 +233,24 @@ broadcast([C|Clients], Msg) ->
     C ! Msg,
     broadcast(Clients, Msg).
 
+
 %% ### `client`
+%%
+%% The client is somewhat similar to the server, but performs a little bit more
+%% work. If a client sends a message to the server, but the server has accepted
+%% a different message in the time in betweem this message and the last one, the
+%% client and server will be out of sync. Since the server silently rejects
+%% messages which are not based off of the proper document state, the client
+%% will only find out whether its message was accepted once it receives the next
+%% message from the server.
+%%
+%% If the next message received from the server is the message that was last
+%% sent, we know that the message was accepted and we can remove it from our
+%% outgoing buffer of operations and local document states. However, if the next
+%% message we receive from the server is not ours, we know that someone else
+%% made it there first and that we must now apply their operation locally and
+%% transform each operation (and document state) in the buffer which is queued
+%% to be sent to the server.
 
 client(Server) ->
     Server ! {newclient, self()},
@@ -295,10 +312,27 @@ transform_each([{A, _} | Rest], B, New_Doc) ->
     [{Aprime, Next_New_Doc} | transform_each(Rest, Bprime, Next_New_Doc)].
 
 
-%% ## Application
-%%
-%% OTP Application interface to play nice with the Erlang ecosystem.
-%%
+%% ## Conclusion
+
+%% The last thing we must do is provide an API to inspect the document that each
+%% server or client currently has and provide a standard OTP Application wrapper
+%% around our methods.
+
+get_doc() ->
+    get_doc(ot_server).
+
+get_doc(Who) ->
+    get_doc(Who, 5000).
+
+get_doc(Who, Timeout) ->
+    Who ! {doc, self()},
+    receive
+        Doc ->
+            {ok, Doc}
+    after Timeout ->
+            {error, "No response."}
+    end.
+
 %% TODO: http://www.erlang.org/doc/design_principles/applications.html
 
 start() ->
@@ -306,18 +340,6 @@ start() ->
 
 stop() ->
     ot_server ! stop.
-
-get_doc() ->
-    get_doc(ot_server).
-
-get_doc(Server) ->
-    Server ! {doc, self()},
-    receive
-        Doc ->
-            {ok, Doc}
-    after 5000 ->
-            {error, "No response within 5 seconds."}
-    end.
 
 
 %% ## Tests
@@ -436,6 +458,35 @@ concurrent_deletes_test() ->
             {ok, "This   document."} = get_doc(A),
             {ok, "This   document."} = get_doc(B),
             {ok, "This   document."} = get_doc(Server)
+    end,
+
+    Server ! stop.
+
+concurrent_inserts_test() ->
+    Server = spawn_link(ot, server, ["This is the document."]),
+    A = spawn_link(ot, client, [Server]),
+    B = spawn_link(ot, client, [Server]),
+
+    % A inserts "cool ".
+    A ! {user_op, {ins, 12, $c}},
+    A ! {user_op, {ins, 13, $o}},
+    A ! {user_op, {ins, 14, $o}},
+    A ! {user_op, {ins, 15, $l}},
+    A ! {user_op, {ins, 16, 32}},
+
+    % B inserts " thing".
+    B ! {user_op, {ins, 20, 32}},
+    B ! {user_op, {ins, 21, $t}},
+    B ! {user_op, {ins, 22, $h}},
+    B ! {user_op, {ins, 23, $i}},
+    B ! {user_op, {ins, 24, $n}},
+    B ! {user_op, {ins, 25, $g}},
+
+    receive
+    after 1000 ->
+            {ok, "This is the cool document thing."} = get_doc(A),
+            {ok, "This is the cool document thing."} = get_doc(B),
+            {ok, "This is the cool document thing."} = get_doc(Server)
     end,
 
     Server ! stop.

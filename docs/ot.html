@@ -182,7 +182,7 @@ accept with the modifications described in the operation applied to it.</p>
         <div class="octowrap">
           <a class="octothorpe" href="#section-7">#</a>
         </div>
-        <h2>Messages and Client &lt;-&gt; Server Communication</h2>
+        <h2>Client &lt;-&gt; Server Communication</h2>
 <p>When passing our operations between client and server, we need to store some
 metadata about the operation with it. We will call the combination of an
 operation and its metadata a message.</p>
@@ -287,6 +287,20 @@ client.</p>
           <a class="octothorpe" href="#section-9">#</a>
         </div>
         <h3><code>client</code></h3>
+<p>The client is somewhat similar to the server, but performs a little bit more
+work. If a client sends a message to the server, but the server has accepted
+a different message in the time in betweem this message and the last one, the
+client and server will be out of sync. Since the server silently rejects
+messages which are not based off of the proper document state, the client
+will only find out whether its message was accepted once it receives the next
+message from the server.</p>
+<p>If the next message received from the server is the message that was last
+sent, we know that the message was accepted and we can remove it from our
+outgoing buffer of operations and local document states. However, if the next
+message we receive from the server is not ours, we know that someone else
+made it there first and that we must now apply their operation locally and
+transform each operation (and document state) in the buffer which is queued
+to be sent to the server.</p>
       </td>
       <td class=code>
         <div class='highlight'><pre><div class="highlight"><pre><span class="nf">client</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span> <span class="o">-&gt;</span>
@@ -353,43 +367,64 @@ client.</p>
         <div class="octowrap">
           <a class="octothorpe" href="#section-10">#</a>
         </div>
-        <h2>Application</h2>
-<p>OTP Application interface to play nice with the Erlang ecosystem.</p>
-<p>TODO: http://www.erlang.org/doc/design_principles/applications.html</p>
+        <h2>Conclusion</h2>
       </td>
       <td class=code>
-        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">start</span><span class="p">()</span> <span class="o">-&gt;</span>
-    <span class="nb">register</span><span class="p">(</span><span class="n">ot_server</span><span class="p">,</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;&quot;</span><span class="p">])).</span>
-
-<span class="nf">stop</span><span class="p">()</span> <span class="o">-&gt;</span>
-    <span class="n">ot_server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span>
-
-<span class="nf">get_doc</span><span class="p">()</span> <span class="o">-&gt;</span>
-    <span class="n">get_doc</span><span class="p">(</span><span class="n">ot_server</span><span class="p">).</span>
-
-<span class="nf">get_doc</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span> <span class="o">-&gt;</span>
-    <span class="nv">Server</span> <span class="o">!</span> <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="n">self</span><span class="p">()},</span>
-    <span class="k">receive</span>
-        <span class="nv">Doc</span> <span class="o">-&gt;</span>
-            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}</span>
-    <span class="k">after</span> <span class="mi">5000</span> <span class="o">-&gt;</span>
-            <span class="p">{</span><span class="n">error</span><span class="p">,</span> <span class="s">&quot;No response within 5 seconds.&quot;</span><span class="p">}</span>
-    <span class="k">end</span><span class="p">.</span></pre></div></pre></div>
+        <div class='highlight'><pre><div class="highlight"><pre></pre></div></pre></div>
       </td>
     </tr><tr id='section-11'>
       <td class=docs>
         <div class="octowrap">
           <a class="octothorpe" href="#section-11">#</a>
         </div>
-        <h2>Tests</h2>
+        <p>The last thing we must do is provide an API to inspect the document that each
+server or client currently has and provide a standard OTP Application wrapper
+around our methods.</p>
       </td>
       <td class=code>
-        <div class='highlight'><pre><div class="highlight"><pre></pre></div></pre></div>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">get_doc</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="n">get_doc</span><span class="p">(</span><span class="n">ot_server</span><span class="p">).</span>
+
+<span class="nf">get_doc</span><span class="p">(</span><span class="nv">Who</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="n">get_doc</span><span class="p">(</span><span class="nv">Who</span><span class="p">,</span> <span class="mi">5000</span><span class="p">).</span>
+
+<span class="nf">get_doc</span><span class="p">(</span><span class="nv">Who</span><span class="p">,</span> <span class="nv">Timeout</span><span class="p">)</span> <span class="o">-&gt;</span>
+    <span class="nv">Who</span> <span class="o">!</span> <span class="p">{</span><span class="n">doc</span><span class="p">,</span> <span class="n">self</span><span class="p">()},</span>
+    <span class="k">receive</span>
+        <span class="nv">Doc</span> <span class="o">-&gt;</span>
+            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="nv">Doc</span><span class="p">}</span>
+    <span class="k">after</span> <span class="nv">Timeout</span> <span class="o">-&gt;</span>
+            <span class="p">{</span><span class="n">error</span><span class="p">,</span> <span class="s">&quot;No response.&quot;</span><span class="p">}</span>
+    <span class="k">end</span><span class="p">.</span></pre></div></pre></div>
       </td>
     </tr><tr id='section-12'>
       <td class=docs>
         <div class="octowrap">
           <a class="octothorpe" href="#section-12">#</a>
+        </div>
+        <p>TODO: http://www.erlang.org/doc/design_principles/applications.html</p>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre><span class="nf">start</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nb">register</span><span class="p">(</span><span class="n">ot_server</span><span class="p">,</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;&quot;</span><span class="p">])).</span>
+
+<span class="nf">stop</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="n">ot_server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-13'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-13">#</a>
+        </div>
+        <h2>Tests</h2>
+      </td>
+      <td class=code>
+        <div class='highlight'><pre><div class="highlight"><pre></pre></div></pre></div>
+      </td>
+    </tr><tr id='section-14'>
+      <td class=docs>
+        <div class="octowrap">
+          <a class="octothorpe" href="#section-14">#</a>
         </div>
         <h3>Applying and Transforming Operations</h3>
       </td>
@@ -455,10 +490,10 @@ client.</p>
     <span class="s">&quot;tca&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">A</span><span class="p">),</span> <span class="nv">Bp</span><span class="p">),</span>
     <span class="s">&quot;tca&quot;</span> <span class="o">=</span> <span class="n">apply_op</span><span class="p">(</span><span class="n">apply_op</span><span class="p">(</span><span class="s">&quot;cab&quot;</span><span class="p">,</span> <span class="nv">B</span><span class="p">),</span> <span class="nv">Ap</span><span class="p">).</span></pre></div></pre></div>
       </td>
-    </tr><tr id='section-13'>
+    </tr><tr id='section-15'>
       <td class=docs>
         <div class="octowrap">
-          <a class="octothorpe" href="#section-13">#</a>
+          <a class="octothorpe" href="#section-15">#</a>
         </div>
         <h3>Client &lt;-&gt; Server Communication</h3>
       </td>
@@ -512,6 +547,35 @@ client.</p>
             <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This   document.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">A</span><span class="p">),</span>
             <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This   document.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">B</span><span class="p">),</span>
             <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This   document.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span>
+    <span class="k">end</span><span class="p">,</span>
+
+    <span class="nv">Server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span>
+
+<span class="nf">concurrent_inserts_test</span><span class="p">()</span> <span class="o">-&gt;</span>
+    <span class="nv">Server</span> <span class="o">=</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">server</span><span class="p">,</span> <span class="p">[</span><span class="s">&quot;This is the document.&quot;</span><span class="p">]),</span>
+    <span class="nv">A</span> <span class="o">=</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="p">[</span><span class="nv">Server</span><span class="p">]),</span>
+    <span class="nv">B</span> <span class="o">=</span> <span class="nb">spawn_link</span><span class="p">(</span><span class="n">ot</span><span class="p">,</span> <span class="n">client</span><span class="p">,</span> <span class="p">[</span><span class="nv">Server</span><span class="p">]),</span>
+
+    <span class="c">% A inserts &quot;cool &quot;.</span>
+    <span class="nv">A</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">12</span><span class="p">,</span> <span class="sc">$c</span><span class="p">}},</span>
+    <span class="nv">A</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">13</span><span class="p">,</span> <span class="sc">$o</span><span class="p">}},</span>
+    <span class="nv">A</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">14</span><span class="p">,</span> <span class="sc">$o</span><span class="p">}},</span>
+    <span class="nv">A</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">15</span><span class="p">,</span> <span class="sc">$l</span><span class="p">}},</span>
+    <span class="nv">A</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">16</span><span class="p">,</span> <span class="mi">32</span><span class="p">}},</span>
+
+    <span class="c">% B inserts &quot; thing&quot;.</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">20</span><span class="p">,</span> <span class="mi">32</span><span class="p">}},</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">21</span><span class="p">,</span> <span class="sc">$t</span><span class="p">}},</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">22</span><span class="p">,</span> <span class="sc">$h</span><span class="p">}},</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">23</span><span class="p">,</span> <span class="sc">$i</span><span class="p">}},</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">24</span><span class="p">,</span> <span class="sc">$n</span><span class="p">}},</span>
+    <span class="nv">B</span> <span class="o">!</span> <span class="p">{</span><span class="n">user_op</span><span class="p">,</span> <span class="p">{</span><span class="n">ins</span><span class="p">,</span> <span class="mi">25</span><span class="p">,</span> <span class="sc">$g</span><span class="p">}},</span>
+
+    <span class="k">receive</span>
+    <span class="k">after</span> <span class="mi">1000</span> <span class="o">-&gt;</span>
+            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This is the cool document thing.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">A</span><span class="p">),</span>
+            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This is the cool document thing.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">B</span><span class="p">),</span>
+            <span class="p">{</span><span class="n">ok</span><span class="p">,</span> <span class="s">&quot;This is the cool document thing.&quot;</span><span class="p">}</span> <span class="o">=</span> <span class="n">get_doc</span><span class="p">(</span><span class="nv">Server</span><span class="p">)</span>
     <span class="k">end</span><span class="p">,</span>
 
     <span class="nv">Server</span> <span class="o">!</span> <span class="n">stop</span><span class="p">.</span>
