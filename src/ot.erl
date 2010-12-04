@@ -1,5 +1,5 @@
-%% This is a simple example written in Erlang of the real-time
-%% group-collaboration algorithm [Operational Transformation][ot]. OT is an
+%% This is a simple example of the real-time group-collaboration algorithm
+%% [Operational Transformation][ot] (or OT) written in Erlang. OT is an
 %% optimistic concurrency algorithm that lets clients apply operations to a
 %% document immediately as they are created, and only synchronizes the changes
 %% with the server after they have been made. If another client has altered the
@@ -12,17 +12,17 @@
 
 -module(ot).
 -include_lib("eunit/include/eunit.hrl").
--export([start/0, stop/0, server/1, client/1, get_doc/0]).
+-export([start/0, stop/0, server/1, client/1, get_doc/0, get_doc/1]).
 
 
-%% ## Operations
+%% ## Operations: Transforming and Applying
 %%
 %% Each operation is either an insert or a delete of a single character at an
 %% index in a document. A document is simply a string. This is hardly fit for
 %% real-world use: most documents are more complicated than plain text, and
 %% working one character at a time will create an unneccessary amount of
 %% operations which require transformations. The large amount of operations
-%% taxes bandwitdh more than you would want in a real world application, as
+%% taxes bandwidth more than you would want in a real world application, as
 %% well. I am using single character operations for simplicity.
 %%
 %% ### `xform`
@@ -130,7 +130,7 @@ apply_op(Doc, {ins, 0, Char}) ->
 apply_op([H|T], {ins, X, Char}) ->
     [H | apply_op(T, {ins, X-1, Char})].
 
-%% ## Messages and Client/Server Communication
+%% ## Messages and Client <-> Server Communication
 %%
 %% When passing our operations between client and server, we need to store some
 %% metadata about the operation with it. We will call the combination of an
@@ -163,6 +163,61 @@ apply_op([H|T], {ins, X, Char}) ->
 hash(Doc) ->
     binary_to_list(erlang:md5(Doc)).
 
+
+%% ### `server`
+%%
+%% The server simply keeps a master copy of the document, a list of clients
+%% which are connected, and a history of changes. The history is not currently
+%% used in this implementation; more about that later.
+%%
+%% The clients are constantly sending messages to the server, but the server can
+%% only accept one at a time. It attempts to take them on a first come, first
+%% serve basis, however it must reject many messages. To greatly simplify the
+%% implementation, **the server will only accept messages whose parent hash is
+%% equal to the hash of the current master document**. It ignores every other
+%% message.
+%%
+%% Once it accepts a message which is based off of the current master document,
+%% it sends broadcasts that document back to every client, including the one
+%% which generated it. The reason it sends the message back to the client which
+%% created it is so that the client gets confirmation that the operation was
+%% applied and can send its next operation.
+%%
+%% We could make the OT process more efficient by accepting any message which
+%% inherits from any part of the history, and apply `xform` as needed until we
+%% get the document in a consistent state, but this would muddy the currently
+%% clear logic of the server. Further, in Real World use cases, you want to keep
+%% the work the server performs to a minimum. In such Real World use cases, the
+%% client would probably be a browser running JavaScript, and efficiency will
+%% matter less because it is only the server which is under load, and not the
+%% client.
+
+server(Doc) ->
+    server(Doc, [], []).
+
+server(Doc, Clients, History) ->
+    receive
+        stop ->
+            lists:foreach(fun (C) -> C ! stop end, Clients),
+            ok;
+        {doc, Pid} ->
+            Pid ! Doc,
+            server(Doc, Clients, History);
+        {newclient, Pid} ->
+            Pid ! {doc, Doc},
+            server(Doc, [Pid | Clients], History);
+        {msg, Parent, Op} ->
+            case apply_message(Doc, {msg, Parent, Op}) of
+                {ok, New_Doc} ->
+                    broadcast(Clients, {msg, Parent, Op}),
+                    server(New_Doc,
+                           Clients,
+                           [{hash(New_Doc), New_Doc} | History]);
+                _ ->
+                    server(Doc, Clients, History)
+            end
+    end.
+
 apply_message(Doc, {msg, Parent, Op}) ->
     case hash(Doc) == Parent of
         true ->
@@ -172,94 +227,72 @@ apply_message(Doc, {msg, Parent, Op}) ->
                      operation was generated from a different document state."}
     end.
 
-server(Doc) ->
-    server(Doc, [], []).
-
-server(Doc, Clients, History) ->
-    receive
-        stop ->
-            ?debugMsg("Server stopping~n"),
-            lists:foreach(fun (C) -> C ! stop end, Clients),
-            ok;
-        {doc, Pid} ->
-            Pid ! Doc,
-            server(Doc, Clients, History);
-        {newclient, Pid} ->
-            ?debugFmt("Server got new client ~p~n", [Pid]),
-            Pid ! {doc, Doc},
-            server(Doc, [Pid | Clients], History);
-        {msg, Parent, Op} ->
-            % TODO: look in history
-            ?debugFmt("Server got new message with op ~p~n", [Op]),
-            case apply_message(Doc, {msg, Parent, Op}) of
-                {ok, New_Doc} ->
-                    ?debugMsg("    message applied successfully~n"),
-                    broadcast(Clients, {msg, Parent, Op}),
-                    server(New_Doc,
-                           Clients,
-                           [{hash(New_Doc), New_Doc} | History]);
-                _ ->
-                    ?debugMsg("    message did not apply, ignoring it...~n"),
-                    server(Doc, Clients, History)
-            end
-    end.
-
 broadcast([], _) ->
     ok;
 broadcast([C|Clients], Msg) ->
-    ?debugFmt("broadcasting ~p to ~p~n", [Msg, C]),
     C ! Msg,
     broadcast(Clients, Msg).
+
+%% ### `client`
 
 client(Server) ->
     Server ! {newclient, self()},
     receive
         {doc, Doc} ->
-            Server ! {msg, hash(Doc), nop},
-            client(Server, Doc, [{nop, Doc}])
+            client(Server, Doc, [])
     end.
 
-% TODO: outgoing should be pairs of {Op, Doc}...
 client(Server, Doc, Outgoing) ->
     receive
         {user_op, Op} ->
-            ?debugFmt("Client ~p received user op ~p~n", [self(), Op]),
             case Outgoing of
                 [] ->
-                    ?debugMsg("    sending the new operation~n"),
                     Server ! {msg, hash(Doc), Op},
                     client(Server, Doc, [{Op, apply_op(Doc, Op)}]);
                 _ ->
-                    ?debugMsg("    queueing the new operation~n"),
-                    client(Server, Doc, Outgoing ++ [{Op, apply_op(Doc, Op)}])
+                    {_, Last_Doc} = lists:last(Outgoing),
+                    client(Server, Doc, Outgoing ++ [{Op, apply_op(Last_Doc, Op)}])
             end;
+        {doc, Pid} ->
+            case Outgoing of
+                [] ->
+                    Pid ! Doc,
+                    client(Server, Doc, Outgoing);
+                [_|_] ->
+                    {_, Client_Doc} = lists:last(Outgoing),
+                    Pid ! Client_Doc,
+                    client(Server, Doc, Outgoing)
+                end;
         {msg, Hash, Op} ->
-            ?debugFmt("Client ~p got message from server: ~p~n", [self(), {msg, Hash, Op}]),
             Hash = hash(Doc),
             New_Doc = apply_op(Doc, Op),
             case Outgoing of
                 [{Op, New_Doc} | Rest] ->
-                    ?debugMsg("    it was one that I sent~n"),
                     case Rest of
-                        [{Next_Op, _} | _] ->
-                            ?debugFmt("Client ~p sending buffered operation ~p to server~n", [self(), Next_Op]),
-                            Server ! {msg, hash(New_Doc), Next_Op},
-                            client(Server, New_Doc, Rest);
                         [] ->
-                            client(Server, New_Doc, [])
+                            client(Server, New_Doc, []);
+                        [{Next_Op, _} | _] ->
+                            Server ! {msg, hash(New_Doc), Next_Op},
+                            client(Server, New_Doc, Rest)
                     end;
                 _ ->
-                    ?debugMsg("    it was one someone else sent~n"),
-                    Outgoing1 = transform_each(Outgoing, Op),
-                    client(Server, New_Doc, Outgoing1)
+                    Outgoing1 = transform_each(Outgoing, Op, New_Doc),
+                    case Outgoing1 of
+                        [] ->
+                            client(Server, New_Doc, []);
+                        [{Next_Op, _} | _] ->
+                            Server ! {msg, hash(New_Doc), Next_Op},
+                            client(Server, New_Doc, Outgoing1)
+                    end
             end
     end.
 
-transform_each([], _) ->
+transform_each([], _, _) ->
     [];
-transform_each([{A, Doc} | Rest], B) ->
+transform_each([{A, _} | Rest], B, New_Doc) ->
     {ok, {Aprime, Bprime}} = xform(A, B),
-    [{Aprime, Doc} | transform_each(Rest, Bprime)].
+    Next_New_Doc = apply_op(New_Doc, Aprime),
+    [{Aprime, Next_New_Doc} | transform_each(Rest, Bprime, Next_New_Doc)].
 
 
 %% ## Application
@@ -281,11 +314,15 @@ get_doc(Server) ->
     Server ! {doc, self()},
     receive
         Doc ->
-            Doc
+            {ok, Doc}
+    after 5000 ->
+            {error, "No response within 5 seconds."}
     end.
 
 
 %% ## Tests
+
+%% ### Applying and Transforming Operations
 
 identical_delete_test() ->
     A = B = {del, 3},
@@ -348,12 +385,57 @@ insert_delete_c_test() ->
     "tca" = apply_op(apply_op("cab", A), Bp),
     "tca" = apply_op(apply_op("cab", B), Ap).
 
-client_server_communication_test() ->
+%% ### Client <-> Server Communication
+
+simple_client_server_communication_test() ->
     Server = spawn_link(ot, server, [" is cool"]),
     Client = spawn_link(ot, client, [Server]),
     Client ! {user_op, {ins, 0, $n}},
+
+    receive
+    after 100 ->
+            {ok, "n is cool"} = get_doc(Server)
+    end,
     Client ! {user_op, {ins, 1, $i}},
+
+    receive
+    after 100 ->
+            {ok, "ni is cool"} = get_doc(Server)
+    end,
+
     Client ! {user_op, {ins, 2, $c}},
+    receive
+    after 100 ->
+            {ok, "nic is cool"} = get_doc(Server)
+    end,
+
     Client ! {user_op, {ins, 3, $k}},
-    "nick" = get_doc(Server),
+    receive
+    after 100 ->
+            {ok, "nick is cool"} = get_doc(Server)
+    end,
+
+    Server ! stop.
+
+concurrent_deletes_test() ->
+    Server = spawn_link(ot, server, ["This is the document."]),
+    A = spawn_link(ot, client, [Server]),
+    B = spawn_link(ot, client, [Server]),
+
+    % A deletes "is".
+    A ! {user_op, {del, 6}},
+    A ! {user_op, {del, 5}},
+
+    % B deletes "the".
+    B ! {user_op, {del, 10}},
+    B ! {user_op, {del, 9}},
+    B ! {user_op, {del, 8}},
+
+    receive
+    after 1000 ->
+            {ok, "This   document."} = get_doc(A),
+            {ok, "This   document."} = get_doc(B),
+            {ok, "This   document."} = get_doc(Server)
+    end,
+
     Server ! stop.
